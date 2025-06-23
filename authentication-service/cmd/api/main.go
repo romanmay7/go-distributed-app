@@ -1,6 +1,8 @@
 package main
 
 import (
+	"authentication/data"
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,20 +11,24 @@ import (
 // Docker let multiple containers listen on the same port and threats them as individual services
 const webPort = "80"
 
-type BrokerApp struct{}
+type AuthServiceApp struct {
+	DB     *sql.DB
+	Models data.Models
+}
 
 func main() {
-	app := BrokerApp{}
+	log.Println("Starting authentication service")
 
-	log.Printf("Starting broker service on port %s\n", webPort)
+	// TODO connect to DB
 
-	// define http server
+	// set up config
+	app := AuthServiceApp{}
+
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%s", webPort),
-		Handler: app.routesHandler(),
+		Handler: app.routes(),
 	}
 
-	// start the server
 	err := srv.ListenAndServe()
 	if err != nil {
 		log.Panic(err)
