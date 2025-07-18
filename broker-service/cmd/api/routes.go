@@ -25,5 +25,7 @@ func (app *BrokerApp) routesHandler() http.Handler {
 
 	mux.Post("/", app.BrokerHandler)
 
+	mux.Post("/handle", app.HandleSubmission)
+
 	return mux
 }
