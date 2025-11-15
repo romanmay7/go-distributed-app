@@ -1,10 +1,11 @@
 SHELL=cmd.exe
 FRONT_END_BINARY=frontApp.exe
-BROKER_BINARY=brokerApp
-AUTH_BINARY=authApp
-LOGGER_BINARY=loggerServiceApp
-MAIL_BINARY=mailerApp
-LISTENER_BINARY=listenerApp
+FRONT_END_BINARY_PATH=bin/frontApp.exe
+BROKER_BINARY=bin/brokerApp
+AUTH_BINARY=bin/authApp
+LOGGER_BINARY=bin/loggerServiceApp
+MAIL_BINARY=bin/mailerApp
+LISTENER_BINARY=bin/listenerApp
 
 ## up: starts all containers in the background without forcing build
 up:
@@ -53,13 +54,13 @@ build_auth:
 ## build_front: builds the frone end binary
 build_front:
 	@echo Building front end binary...
-	chdir ..\front-end && set CGO_ENABLED=0&& set GOOS=windows&& go build -o ${FRONT_END_BINARY} ./cmd/web
+	chdir ..\front-end && set CGO_ENABLED=0&& set GOOS=windows&& go build -o ${FRONT_END_BINARY_PATH} ./cmd/web
 	@echo Done!
 
 ## start: starts the front end
 start: build_front
 	@echo Starting front end
-	chdir ..\front-end && start /B ${FRONT_END_BINARY} &
+	chdir ..\front-end && start /B ${FRONT_END_BINARY_PATH} &
 
 ## stop: stop the front end
 stop:
