@@ -2,11 +2,17 @@ package main
 
 import (
 	"broker/event"
+	"broker/logs"
 	"bytes"
 	"encoding/json"
 	"errors"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"log"
 	"net/http"
 	"net/rpc"
+	"time"
 )
 
 type RequestPayload struct {
@@ -264,4 +270,105 @@ func (app *BrokerApp) logItemViaRPC(w http.ResponseWriter, l LogPayload) {
 	app.writeJSON(w, http.StatusAccepted, payload)
 }
 
+// ------------------------------------------------------------------------------------------------------------
+func (app *BrokerApp) LogViaGRPC(w http.ResponseWriter, r *http.Request) {
+	var requestPayload RequestPayload
+
+	log.Println("Broker Service :LogViaGRPC called")
+
+	// 1. Read JSON Request
+	if err := app.readJSON(w, r, &requestPayload); err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	// Define the context for the dial operation with a timeout (e.g., 5 seconds)
+	// This context governs how long we wait for the connection to be established.
+	dialCtx, cancelDial := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelDial()
+
+	// 2. Establish gRPC Connection ( Non-Blocking Dial with Context)
+	// DialContext attempts to connect; it is the modern replacement for Dial() with WithBlock().
+	conn, err := grpc.DialContext(
+		dialCtx,
+		"logger-service:50001", // The target address
+		grpc.WithTransportCredentials(insecure.NewCredentials()), // Use insecure creds for internal service
+	)
+	if err != nil {
+		// Connection failed (e.g., dial timeout, service unavailable)
+		log.Printf("could not connect to Logger Service at logger-service:50001: %w", err)
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	log.Print("Broker Service connected to Logger Service at logger-service:50001")
+
+	defer conn.Close() // Ensure the connection is closed after the handler finishes
+
+	// 3. Create gRPC Client and Context for the RPC Call
+	c := logs.NewLogServiceClient(conn)
+	// Define a separate, short timeout for the actual RPC call (e.g., 1 second)
+	rpcCtx, cancelRPC := context.WithTimeout(context.Background(), time.Second)
+	defer cancelRPC()
+
+	// 4. Execute the gRPC Call
+	_, err = c.WriteLog(rpcCtx, &logs.LogRequest{
+		LogEntry: &logs.Log{
+			Name: requestPayload.Log.Name,
+			Data: requestPayload.Log.Data,
+		},
+	})
+	if err != nil {
+		// Handle errors during the actual RPC call (e.g., service side error, RPC timeout)
+		app.errorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+
+	// 5. Send Successful Response
+	payload := jsonResponse{
+		Error:   false,
+		Message: "logged successfully via gRPC",
+	}
+
+	app.writeJSON(w, http.StatusAccepted, payload)
+}
+
+// ------------------------------------------------------------------------------------------------------------
+/*func (app *BrokerApp) LogViaGRPC(w http.ResponseWriter, r *http.Request) {
+	var requestPayload RequestPayload
+
+	err := app.readJSON(w, r, &requestPayload)
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	conn, err := grpc.Dial("logger-service:50001", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+	defer conn.Close()
+
+	c := logs.NewLogServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	_, err = c.WriteLog(ctx, &logs.LogRequest{
+		LogEntry: &logs.Log{
+			Name: requestPayload.Log.Name,
+			Data: requestPayload.Log.Data,
+		},
+	})
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	var payload jsonResponse
+	payload.Error = false
+	payload.Message = "logged"
+
+	app.writeJSON(w, http.StatusAccepted, payload)
+}*/
 // ------------------------------------------------------------------------------------------------------------
